@@ -10,12 +10,12 @@ const PostSchema = new mongoose.Schema({
     type: String,
     required: [true, 'Please add a description'],
   },
-  category: {
-    type: String,
-    required: [true, 'Please add a category']
-  },
   status: {
     type: Boolean,
+    default: false
+  },
+  image: {
+    type: String,
     default: true
   },
   createdAt: {
@@ -25,6 +25,11 @@ const PostSchema = new mongoose.Schema({
   user: {
     type: mongoose.Schema.ObjectId,
     ref: 'User',
+    required: true,
+  },
+  category: {
+    type: mongoose.Schema.ObjectId,
+    ref: 'Category',
     required: true,
   },
 });

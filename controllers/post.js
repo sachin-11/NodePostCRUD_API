@@ -1,5 +1,6 @@
 const ErrorResponse = require('../utils/errorResponse');
 const asyncHandler = require('../middleware/async');
+const path = require('path');
 const Post = require('../models/Post');
 
 //@desc Get All posts
@@ -80,9 +81,11 @@ exports.getPost = asyncHandler(async (req, res, next) => {
 //@access Private
 
 exports.createPosts = asyncHandler(async (req, res, next) => {
+  const { name, description, status, image } = req.body;
   //Add user to req.body
-  req.body.user = req.user.id;
-  //Check for published atricle
+  const { _id: userId } = req.user
+  const { categoryId } = req.params
+  //Check for published posts
   const publishedPosts = await Post.findOne({ user: req.user.id });
   //if user is not an admin , they can add one posts
   if (publishedPosts && req.user.role !== 'admin') {
@@ -93,8 +96,17 @@ exports.createPosts = asyncHandler(async (req, res, next) => {
       )
     );
   }
-  const post = await Post.create(req.body);
-  res.status(200).json({ success: true, data: post });
+  const post = await new Post({
+     name,
+     description,
+     image,
+     status,
+     category: categoryId,
+     user: userId,
+  })
+
+const savePosts = await post.save();
+res.status(200).json({ success: true, data: savePosts });
 });
 
 //desc  update posts
@@ -112,7 +124,7 @@ exports.updatePosts = asyncHandler(async (req, res, next) => {
   if (posts.user.toString() !== req.user.id && req.user.role !== 'admin') {
     return next(
       new ErrorResponse(
-        `User ${req.user.id} is not authorized to update bootcamp`,
+        `User ${req.user.id} is not authorized to update posts`,
         401
       )
     );
@@ -150,4 +162,55 @@ exports.deletePosts = asyncHandler(async (req, res, next) => {
   }
   posts.remove();
   res.status(200).json({ success: true, data: {} });
+});
+
+// desc  Upload photo for bootcamp
+// @route PUT  /api/v1/bootcamps/:id/photo
+// @access Private
+
+exports.postsPhotoUpload = asyncHandler(async (req, res, next) => {
+  const posts = await Post.findById(req.params.id);
+
+  if (!posts) {
+    return next(
+      new ErrorResponse(`Posts not found with id of ${req.params.id}`, 404)
+    );
+  }
+  if (!req.files) {
+    return next(new ErrorResponse(`Please upload a file`, 400));
+  }
+
+  const file = req.files.file;
+
+  // Make sure the image is a photo
+  if (!file.mimetype.startsWith('image')) {
+    return next(new ErrorResponse(`Please upload an image file`, 400));
+  }
+
+  // Check filesize
+  if (file.size > process.env.MAX_FILE_UPLOAD) {
+    return next(
+      new ErrorResponse(
+        `Please upload an image less than ${process.env.MAX_FILE_UPLOAD}`,
+        400
+      )
+    );
+  }
+
+  // Create custom filename
+  file.name = `photo_${posts._id}${path.parse(file.name).ext}`;
+
+  file.mv(`${process.env.FILE_UPLOAD_PATH}/${file.name}`, async (err) => {
+    if (err) {
+      console.error(err);
+      return next(new ErrorResponse(`Problem with file upload`, 500));
+    }
+
+    await Post.findByIdAndUpdate(req.params.id, { image: file.name });
+
+    res.status(200).json({
+      success: true,
+      data: file.name,
+    });
+  });
 });
